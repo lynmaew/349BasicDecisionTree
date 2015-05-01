@@ -12,6 +12,18 @@ my @tree_attribute;
 my @tree_leaf;
 my @attribute_list;
 
+#other global data
+my $num_train_lines = 0;
+my $num_attributes = 0;
+my @train_data;
+
+#parameters
+my $max_levels = 10;
+my $pruning = 1;
+my $majority_threshold = 0.9;
+my $share_threshold = 0.005;
+
+#calls tree_gen to generate tree
 sub train() {
 
   #read in data, find number of attributes (should be at least 2)
@@ -22,14 +34,13 @@ sub train() {
   my $attribute_line = $train_file_lines[0];
   splice(@train_file_lines, 0, 1);
   @attribute_list = split(',', $attribute_line);
-  my $num_attributes = $#attribute_list;
+  $num_attributes = $#attribute_list;
   if ($num_attributes < 1) {
     die "Not enough attributes to train on";
   }
 
   #parse file
   #assume each line has same number of entries as first
-  my @train_data;
   my $i = -1;
   foreach my $train_file_line (@train_file_lines) {
     $i = $i + 1;
@@ -41,7 +52,7 @@ sub train() {
 
   #clean input data
   #assign missing values
-  my $num_train_lines = $#train_file_lines;
+  $num_train_lines = $#train_file_lines;
   foreach my $j (0..($num_attributes - 1)) {
     my $sum = 0;
     foreach my $i (0..$num_train_lines) {
@@ -62,8 +73,10 @@ sub train() {
   my $upper_node_index = 1;
   my @upper_unused_attributes = (0..($num_attributes-1));
 
-  my $max_levels = 10;
+  tree_gen($upper_left, $upper_right, $upper_node_index, $num_attributes, @upper_unused_attributes);
+}
 
+#a method for generating decision tree
 sub tree_gen {
   my $left = $_[0];
   my $right = $_[1];
@@ -133,17 +146,23 @@ sub tree_gen {
   $tree_B[$node_index] = $count_B;
   $tree_leaf[$node_index] = 0;
 
-  if ($node_index < 2**$max_levels) {
+  if ($pruning == 1) {
+    #prune on size of example set for node
+    if ($count_A + $count_B < $share_threshold * $num_train_lines) {
+      $tree_leaf[$node_index] = 1;
+    }
+    #prune on ratio of classes
+    if ((($count_A / ($count_A + $count_B)) > $majority_threshold) || (($count_A / ($count_A + $count_B)) < (1 - $majority_threshold))) {
+      $tree_leaf[$node_index] = 1;
+    }
+  }
+  if (($tree_leaf[$node_index] == 0) && ($node_index < 2**$max_levels)) {
     my @next_unused_array = grep {$_ != $best_attribute} @unused_attributes;
     tree_gen($left, $best_index-1, ($node_index * 2), $num_attributes - 1, @next_unused_array);
     tree_gen($best_index, $right, (($node_index * 2) + 1), $num_attributes - 1, @next_unused_array);
   } else {
     $tree_leaf[$node_index] = 1;
   }
-}
-
-  tree_gen($upper_left, $upper_right, $upper_node_index, $num_attributes, @upper_unused_attributes);
-
 }
 
 #prints tree to standard output
@@ -167,6 +186,18 @@ sub tree_print {
 }
 
 #create routine to clean tree leaves
+sub tree_clean {
+  my $node_index = $_[0];
+  if ($tree_leaf[$node_index] == 0) {
+    tree_clean($node_index * 2);
+    tree_clean($node_index * 2 + 1);
+    if ($tree_leaf[$node_index * 2] == 1 && $tree_leaf[$node_index * 2 + 1] == 1) {
+      if (($tree_A[$node_index * 2] > $tree_B[$node_index * 2]) == ($tree_A[$node_index * 2 + 1] > $tree_B[$node_index * 2 + 1])) {
+        $tree_leaf[$node_index] = 1;
+      }
+    }
+  }
+}
 
 #main
 if ($#ARGV < 1) {
@@ -176,6 +207,7 @@ if ($#ARGV < 1) {
 } elsif ($ARGV[0] == "t") {
   train();
   my $node_index = 1;
+  tree_clean($node_index);
   tree_print($node_index);
 } else {
   print "Unable to parse command\n";
