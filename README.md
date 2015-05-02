@@ -16,8 +16,10 @@ Usage:
     tests decision tree on  data in validatefile
     compares results from tree with results in validatefile
     prints accuracy
-  id3.pl d trainfile [pruning maxlevels]
-    creates a decision tree based on data in trainfile
-    prints tree to stdout in Disjunctive Normal Form
+  id3.pl l trainfile validatefile percent-of-tree [pruning maxlevels]
+    validation on the full validation set but using different subsets of the training set to create the tree.
+    produces and average result for different runs on different subsets of the training set.
+    size of the subset is a percentage of the overall training set so .1 is 10% of the training set.
+    
   append pruning maxlevels to any of the above to specify pruning as a boolean and maxlevels as an integer
 ```
