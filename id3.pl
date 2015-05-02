@@ -30,7 +30,9 @@ my $share_threshold = 0.1;
 my $reuse_attributes = 0;
 
 #calls tree_gen to generate tree
-sub train() {
+sub train {
+  my ($start, $end) = @_;
+
 
   #read in data, find number of attributes (should be at least 2)
   #assume first line is label line
@@ -44,6 +46,12 @@ sub train() {
   if ($num_attributes < 1) {
     die "Not enough attributes to train on";
   }
+
+  if ($start != 0 && $end != 0)
+  {
+    @train_file_lines = @train_file_lines[$start..$end];
+  }
+
 
   #parse file
   #assume each line has same number of entries as first
@@ -315,7 +323,69 @@ sub validate {
 
   my $accuracy = $num_correct / $num_validate_lines;
   print "Accuracy on validation file $ARGV[2]: $accuracy\n";
+  return $accuracy;
 
+}
+
+sub learningcurve {
+  my $multiplier = @_[0];
+
+  open (TRAIN_FILE, $ARGV[1]) or die "training file $ARGV[1] could not be read";
+  my @train_file_lines = <TRAIN_FILE>;
+  close (TRAIN_FILE);
+  my $attribute_line = $train_file_lines[0];
+  splice(@train_file_lines, 0, 1);
+  @attribute_list = split(',', $attribute_line);
+  $num_attributes = $#attribute_list;
+  if ($num_attributes < 1) {
+    die "Not enough attributes to train on";
+  }
+
+  my $samplesize = ceil($multiplier * $#train_file_lines);
+
+  my $numbins = ceil($#train_file_lines / $samplesize);
+
+  my $results;
+  if ($numbins >= 5)
+  {
+    foreach my $i (0..4) 
+    {
+      train($i * $samplesize, $samplesize * $i + $samplesize);
+      my $node_index = 1;
+      tree_clean($node_index);
+      $results += validate();
+    }
+    return $results / 5;
+  }
+  elsif ($numbins >= 2) 
+  {
+    foreach my $i (0..4) {
+      train(ceil($i * $samplesize / 4), ceil($samplesize / 4 * $i + $samplesize));
+      my $node_index = 1;
+      tree_clean($node_index);
+      $results += validate();
+      
+    }
+    return $results / 5;
+  }
+  elsif ($numbins > 1)
+  {
+    foreach my $i (0..4) {
+      train(ceil($i * $samplesize / 400), ceil($samplesize / 400 * $i + $samplesize));
+      my $node_index = 1;
+      tree_clean($node_index);
+      $results += validate();
+    }
+    return $results / 5;
+  }
+  else
+  {
+    train(0,0);
+    my $node_index = 1;
+    tree_clean($node_index);
+    return validate();
+  }
+  
 }
 
 #main
@@ -334,20 +404,23 @@ if ($#ARGV < 1) {
   print "    compares results from tree with results in validatefile\n";
   print "    prints accuracy\n";
 } elsif ($ARGV[0] eq "t") {
-  train();
+  train(0,0);
   my $node_index = 1;
   tree_clean($node_index);
   tree_print($node_index);
 } elsif ($ARGV[0] eq "e") {
-  train();
+  train(0,0);
   my $node_index = 1;
   tree_clean($node_index);
   test();
 } elsif ($ARGV[0] eq "v") {
-  train();
+  train(0,0);
   my $node_index = 1;
   tree_clean($node_index);
   validate();
+} elsif ($ARGV[0] eq "l") {
+  print learningcurve($ARGV[3]) . "\n";
+  
 } else {
   print "Unable to parse command\n";
   print "For help:\n  id3.pl h\n";
