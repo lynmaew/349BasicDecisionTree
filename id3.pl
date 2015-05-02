@@ -2,6 +2,7 @@
 use feature ':5.10';
 use strict;
 use POSIX;
+use List::Util qw(min max);
 
 #tree data
 my @tree_A;
@@ -19,7 +20,7 @@ my @train_data;
 
 #parameters
 my $max_levels = 10;
-my $pruning = 1;
+my $pruning = 0;
 my $majority_threshold = 0.9;
 my $share_threshold = 0.005;
 
@@ -199,16 +200,184 @@ sub tree_clean {
   }
 }
 
+sub classify {
+  my ($index, $testline) = @_;
+
+  my @testarr = split(",", $testline);
+  #print "The current index is: " . $index . "\n";
+  #print "The current attribute is: " . $tree_attribute[$index] . "\n";
+  #print "The current tree value is: " . $tree_value[$index] . "\n";
+  #print "The current test value is: " . $testarr[$tree_attribute[$index]] . "\n";
+
+  if ($tree_leaf[$index])
+  {
+    if ($tree_A[$index] > $tree_B[$index])
+    {
+      return 0;
+    }
+    else
+    {
+      return 1;
+    }
+  }
+  else
+  {
+    # check for missing attribute value
+    if (@testarr[$tree_attribute[$index]] == "?")
+    {
+      # get tree_A and tree_B on left
+      my $sum_left = $tree_A[$index * 2] + $tree_B[$index * 2];
+      my $sum_right = $tree_A[$index * 2 + 1] + $tree_B[$index * 2 + 1];
+      # go to left if left is better
+      if ($sum_left > $sum_right)
+      {
+        classify($index * 2, $testline);
+      }
+      # go to right if right is better
+      else
+      {
+        classify($index * 2 + 1, $testline);
+      }
+    }
+    # compare attribute with that in the tree
+    else
+    {
+      if ($tree_value[$index] > @testarr[$tree_attribute[$index]])
+      {  
+        classify($index * 2, $testline);
+      }
+      else
+      {
+        classify($index * 2 + 1, $testline);
+      }
+    }
+  }
+}
+
+sub validate {
+  my ($index, $testline) = @_;
+
+  my @testarr = split(",", $testline);
+  #print "The current index is: " . $index . "\n";
+  #print "The current attribute is: " . $tree_attribute[$index] . "\n";
+  #print "The current tree value is: " . $tree_value[$index] . "\n";
+  #print "The current test value is: " . $testarr[$tree_attribute[$index]] . "\n";
+
+  if ($tree_leaf[$index])
+  {
+    if ($tree_A[$index] > $tree_B[$index])
+    {
+      if (@testarr[$#testarr] == 0)
+      {
+        return 1;
+      }
+      else
+      {
+        return 0;
+      }
+    }
+    else
+    {
+      if (@testarr[$#testarr] == 1)
+      {
+        return 1;
+      }
+      else
+      {
+        return 0;
+      }
+    }
+  }
+  else
+  {
+    # check for missing attribute value
+    if (@testarr[$tree_attribute[$index]] == "?")
+    {
+      # get tree_A and tree_B on left
+      my $sum_left = $tree_A[$index * 2] + $tree_B[$index * 2];
+      my $sum_right = $tree_A[$index * 2 + 1] + $tree_B[$index * 2 + 1];
+      # go to left if left is better
+      if ($sum_left > $sum_right)
+      {
+        validate($index * 2, $testline);
+      }
+      # go to right if right is better
+      else
+      {
+        validate($index * 2 + 1, $testline);
+      }
+    }
+    # compare attribute with that in the tree
+    else
+    {
+      if ($tree_value[$index] > @testarr[$tree_attribute[$index]])
+      {  
+        validate($index * 2, $testline);
+      }
+      else
+      {
+        validate($index * 2 + 1, $testline);
+      }
+    }
+  }
+}
+
 #main
 if ($#ARGV < 1) {
   print "Usage:\n  id3.pl h\n    provides usage help\n";
   print "  id3.pl t trainfile\n    creates a decision tree based on data in trainfile\n";
   print "    prints tree to stdout\n";
-} elsif ($ARGV[0] == "t") {
+} elsif ($ARGV[0] eq "t") {
   train();
   my $node_index = 1;
   tree_clean($node_index);
-  tree_print($node_index);
+  #tree_print($node_index);
+} elsif ($ARGV[0] eq "v") {
+  train();
+  my $node_index = 1;
+  tree_clean($node_index);
+  #print tree_print($node_index);
+
+
+  # test the tree on validation set
+  open (TEST_FILE, $ARGV[1]) or die "test file $ARGV[1] could not be read";
+  my @test_file_lines = <TEST_FILE>;
+  close (TEST_FILE);
+  my $attribute_line = @test_file_lines[0];
+  splice(@test_file_lines, 0, 1);
+  if ($num_attributes < 1) {
+    die "Not enough attributes to test on";
+  }
+
+  my $i = 0;
+  my @results = [];
+  foreach my $testline (@test_file_lines) 
+  {
+    @results[$i] = validate(1, $testline);
+    $i = $i + 1;
+  }
+
+
+  my $len = scalar(@results);
+  print $len . "\n";
+  my $numcorrect;
+  my $numwrong;
+  foreach my $result (@results)
+  {
+    if ($result == 1)
+    {
+      $numcorrect++;
+    }
+    else
+    {
+      $numwrong++;
+    }
+  }
+  print "number correct: " . $numcorrect . "\n";
+  print "number wrong: " . $numwrong . "\n";
+  print "percent correct: " . $numcorrect/$len . "\n";
+
+  #print classify(1, $test_file_lines[4]);
 } else {
   print "Unable to parse command\n";
   print "For help:\n  id3.pl h\n";
