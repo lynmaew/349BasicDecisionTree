@@ -24,9 +24,9 @@ my $num_validate_lines = 0;
 
 #parameters
 my $max_levels = 12;
-my $pruning = 0;
+my $pruning = 1;
 my $majority_threshold = 0.9;
-my $share_threshold = 0.05;
+my $share_threshold = 0.1;
 my $reuse_attributes = 0;
 
 #calls tree_gen to generate tree
