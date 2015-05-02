@@ -16,12 +16,18 @@ my @attribute_list;
 my $num_train_lines = 0;
 my $num_attributes = 0;
 my @train_data;
+my @averages;
+my @test_data;
+my $num_test_lines = 0;
+my @validate_data;
+my $num_validate_lines = 0;
 
 #parameters
-my $max_levels = 10;
-my $pruning = 1;
+my $max_levels = 12;
+my $pruning = 0;
 my $majority_threshold = 0.9;
-my $share_threshold = 0.005;
+my $share_threshold = 0.05;
+my $reuse_attributes = 0;
 
 #calls tree_gen to generate tree
 sub train() {
@@ -60,10 +66,10 @@ sub train() {
         $sum = $sum + $train_data[$i][$j];
       }
     }
-    my $average = $sum / $num_train_lines;
+    $averages[$j] = $sum / $num_train_lines;
     foreach my $i (0..$num_train_lines) {
       if($train_data[$i][$j] == "?") {
-        $train_data[$i][$j] = $average;
+        $train_data[$i][$j] = $averages[$j];
       }
     }
   }
@@ -103,6 +109,7 @@ sub tree_gen {
     
     my $local_A = 0;
     my $local_B = 0;
+    my $prev_val = $train_data[$left][$j];
     foreach my $i ($left..$right) {
       if ($train_data[$i][$num_attributes] == 0) {
         $local_A = $local_A + 1;
@@ -131,11 +138,12 @@ sub tree_gen {
         $e4 = - (($right - $i + 1) / ($right - $left + 1)) * $p4 * log($p4);
       }
       my $local_entropy = $e1 + $e2 + $e3 + $e4;
-      if ($local_entropy < $best_entropy) {
+      if (($local_entropy < $best_entropy) && (($train_data[$i][$j] != $prev_val) || ($i == $left))) {
         $best_entropy = $local_entropy;
         $best_index = $i;
         $best_attribute = $j;
       }
+      $prev_val = $train_data[$i][$j];
     }
   }
 
@@ -157,7 +165,12 @@ sub tree_gen {
     }
   }
   if (($tree_leaf[$node_index] == 0) && ($node_index < 2**$max_levels)) {
-    my @next_unused_array = grep {$_ != $best_attribute} @unused_attributes;
+    my @next_unused_array;
+    if ($reuse_attributes == 1) {
+      @next_unused_array = @unused_attributes;
+    } else {
+      @next_unused_array = grep {$_ != $best_attribute} @unused_attributes;
+    }
     tree_gen($left, $best_index-1, ($node_index * 2), $num_attributes - 1, @next_unused_array);
     tree_gen($best_index, $right, (($node_index * 2) + 1), $num_attributes - 1, @next_unused_array);
   } else {
@@ -185,7 +198,7 @@ sub tree_print {
   }
 }
 
-#create routine to clean tree leaves
+#clean tree leaves from bottom up
 sub tree_clean {
   my $node_index = $_[0];
   if ($tree_leaf[$node_index] == 0) {
@@ -199,16 +212,142 @@ sub tree_clean {
   }
 }
 
+
+#routine to use test data
+sub test {
+  open (TEST_FILE, $ARGV[2]) or die "testing file $ARGV[2] could not be read";
+  my @test_file_lines = <TEST_FILE>;
+  close (TEST_FILE);
+  splice(@test_file_lines, 0, 1);
+
+  #parse file
+  my $i = -1;
+  foreach my $test_file_line (@test_file_lines) {
+    $i = $i + 1;
+    my @split_line = split(',', $test_file_line);
+    for my $j (0..$num_attributes) {
+      $test_data[$i][$j] = $split_line[$j];
+    }
+  }
+
+  #clean input data
+  #assign missing values
+  $num_test_lines = $#test_file_lines;
+  foreach my $j (0..($num_attributes - 1)) {
+    foreach my $i (0..$num_test_lines) {
+      if($test_data[$i][$j] == "?") {
+        $test_data[$i][$j] = $averages[$j];
+      }
+    }
+  }
+
+  #estimate each value
+  foreach my $i (0..$num_test_lines) {
+    my $node_index = 1;
+    while ($tree_leaf[$node_index] != 1) {
+      if ($test_data[$i][$tree_attribute[$node_index]] < $tree_value[$node_index]) {
+        $node_index = $node_index * 2;
+      } else {
+        $node_index = $node_index * 2 + 1;
+      }
+    }
+    if ($tree_A[$node_index] > $tree_B[$node_index]) {
+      print "0\n";
+    } else {
+      print "1\n";
+    }
+  }
+}
+
+#routine to use validate data
+sub validate {
+
+  my $num_correct = 0;
+
+  open (VALIDATE_FILE, $ARGV[2]) or die "validation file $ARGV[2] could not be read";
+  my @validate_file_lines = <VALIDATE_FILE>;
+  close (VALIDATE_FILE);
+  splice(@validate_file_lines, 0, 1);
+
+  #parse file
+  my $i = -1;
+  foreach my $validate_file_line (@validate_file_lines) {
+    $i = $i + 1;
+    my @split_line = split(',', $validate_file_line);
+    for my $j (0..$num_attributes) {
+      $validate_data[$i][$j] = $split_line[$j];
+    }
+  }
+
+  #clean input data
+  #assign missing values
+  $num_validate_lines = $#validate_file_lines;
+  foreach my $j (0..($num_attributes - 1)) {
+    foreach my $i (0..$num_validate_lines) {
+      if($validate_data[$i][$j] == "?") {
+        $validate_data[$i][$j] = $averages[$j];
+      }
+    }
+  }
+
+  #estimate each value
+  foreach my $i (0..$num_validate_lines) {
+    my $node_index = 1;
+    while ($tree_leaf[$node_index] != 1) {
+      if ($validate_data[$i][$tree_attribute[$node_index]] < $tree_value[$node_index]) {
+        $node_index = $node_index * 2;
+      } else {
+        $node_index = $node_index * 2 + 1;
+      }
+    }
+    if ($tree_A[$node_index] > $tree_B[$node_index]) {
+      #estimate 0
+      if ($validate_data[$i][$num_attributes] == 0) {
+        $num_correct = $num_correct + 1;
+      }
+    } else {
+      #estimate 1
+      if ($validate_data[$i][$num_attributes] == 1) {
+        $num_correct = $num_correct + 1;
+      }
+    }
+  }
+
+  my $accuracy = $num_correct / $num_validate_lines;
+  print "Accuracy on validation file $ARGV[2]: $accuracy\n";
+
+}
+
 #main
+
 if ($#ARGV < 1) {
   print "Usage:\n  id3.pl h\n    provides usage help\n";
   print "  id3.pl t trainfile\n    creates a decision tree based on data in trainfile\n";
   print "    prints tree to stdout\n";
-} elsif ($ARGV[0] == "t") {
+  print "  id3.pl e trainfile testfile\n";
+  print "    creates a decision tree based on data in trainfile\n";
+  print "    tests decision tree on data in testfile\n";
+  print "    prints expected classes to stdout, line by line\n";
+  print "  id3.pl v trainfile validatefile\n";
+  print "    creates a decision tree based on data inf trainfile\n";
+  print "    tests decision tree on  data in validatefile\n";
+  print "    compares results from tree with results in validatefile\n";
+  print "    prints accuracy\n";
+} elsif ($ARGV[0] eq "t") {
   train();
   my $node_index = 1;
   tree_clean($node_index);
   tree_print($node_index);
+} elsif ($ARGV[0] eq "e") {
+  train();
+  my $node_index = 1;
+  tree_clean($node_index);
+  test();
+} elsif ($ARGV[0] eq "v") {
+  train();
+  my $node_index = 1;
+  tree_clean($node_index);
+  validate();
 } else {
   print "Unable to parse command\n";
   print "For help:\n  id3.pl h\n";
