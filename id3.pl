@@ -17,12 +17,19 @@ my @attribute_list;
 my $num_train_lines = 0;
 my $num_attributes = 0;
 my @train_data;
+my @averages;
+my @test_data;
+my $num_test_lines = 0;
+my @validate_data;
+my $num_validate_lines = 0;
 
 #parameters
 my $max_levels = 10;
+
 my $pruning = 0;
 my $majority_threshold = 0.9;
-my $share_threshold = 0.005;
+my $share_threshold = 0.05;
+my $reuse_attributes = 0;
 
 #calls tree_gen to generate tree
 sub train() {
@@ -61,10 +68,10 @@ sub train() {
         $sum = $sum + $train_data[$i][$j];
       }
     }
-    my $average = $sum / $num_train_lines;
+    $averages[$j] = $sum / $num_train_lines;
     foreach my $i (0..$num_train_lines) {
       if($train_data[$i][$j] == "?") {
-        $train_data[$i][$j] = $average;
+        $train_data[$i][$j] = $averages[$j];
       }
     }
   }
@@ -104,6 +111,7 @@ sub tree_gen {
     
     my $local_A = 0;
     my $local_B = 0;
+    my $prev_val = $train_data[$left][$j];
     foreach my $i ($left..$right) {
       if ($train_data[$i][$num_attributes] == 0) {
         $local_A = $local_A + 1;
@@ -132,11 +140,12 @@ sub tree_gen {
         $e4 = - (($right - $i + 1) / ($right - $left + 1)) * $p4 * log($p4);
       }
       my $local_entropy = $e1 + $e2 + $e3 + $e4;
-      if ($local_entropy < $best_entropy) {
+      if (($local_entropy < $best_entropy) && (($train_data[$i][$j] != $prev_val) || ($i == $left))) {
         $best_entropy = $local_entropy;
         $best_index = $i;
         $best_attribute = $j;
       }
+      $prev_val = $train_data[$i][$j];
     }
   }
 
@@ -158,7 +167,12 @@ sub tree_gen {
     }
   }
   if (($tree_leaf[$node_index] == 0) && ($node_index < 2**$max_levels)) {
-    my @next_unused_array = grep {$_ != $best_attribute} @unused_attributes;
+    my @next_unused_array;
+    if ($reuse_attributes == 1) {
+      @next_unused_array = @unused_attributes;
+    } else {
+      @next_unused_array = grep {$_ != $best_attribute} @unused_attributes;
+    }
     tree_gen($left, $best_index-1, ($node_index * 2), $num_attributes - 1, @next_unused_array);
     tree_gen($best_index, $right, (($node_index * 2) + 1), $num_attributes - 1, @next_unused_array);
   } else {
@@ -186,7 +200,7 @@ sub tree_print {
   }
 }
 
-#create routine to clean tree leaves
+#clean tree leaves from bottom up
 sub tree_clean {
   my $node_index = $_[0];
   if ($tree_leaf[$node_index] == 0) {
@@ -320,9 +334,11 @@ sub validate {
       }
     }
   }
+
 }
 
 #main
+
 if ($#ARGV < 1) {
   print "Usage:\n  id3.pl h\n    provides usage help\n";
   print "  id3.pl t trainfile\n    creates a decision tree based on data in trainfile\n";
@@ -378,6 +394,7 @@ if ($#ARGV < 1) {
   print "percent correct: " . $numcorrect/$len . "\n";
 
   #print classify(1, $test_file_lines[4]);
+
 } else {
   print "Unable to parse command\n";
   print "For help:\n  id3.pl h\n";
