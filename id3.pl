@@ -24,14 +24,16 @@ my @validate_data;
 my $num_validate_lines = 0;
 
 #parameters
-my $max_levels = 12;
-my $pruning = 1;
+my $max_levels = 6;
+my $pruning = 0;
 my $majority_threshold = 0.9;
 my $share_threshold = 0.1;
 my $reuse_attributes = 0;
 
 #calls tree_gen to generate tree
-sub train() {
+sub train {
+  my ($start, $end) = @_;
+
 
   #read in data, find number of attributes (should be at least 2)
   #assume first line is label line
@@ -45,6 +47,12 @@ sub train() {
   if ($num_attributes < 1) {
     die "Not enough attributes to train on";
   }
+
+  if ($start != 0 || $end != 0)
+  {
+    @train_file_lines = @train_file_lines[$start..$end];
+  }
+
 
   #parse file
   #assume each line has same number of entries as first
@@ -327,6 +335,7 @@ sub validate {
 
   my $accuracy = $num_correct / $num_validate_lines;
   print "Accuracy on validation file $ARGV[2]: $accuracy\n";
+  return $accuracy;
 
 }
 
@@ -353,6 +362,69 @@ sub print_leaves_DNF {
   }
 }
 
+sub learningcurve {
+  my $multiplier = @_[0];
+
+  open (TRAIN_FILE, $ARGV[1]) or die "training file $ARGV[1] could not be read";
+  my @train_file_lines = <TRAIN_FILE>;
+  close (TRAIN_FILE);
+  my $attribute_line = $train_file_lines[0];
+  splice(@train_file_lines, 0, 1);
+  @attribute_list = split(',', $attribute_line);
+  $num_attributes = $#attribute_list;
+  if ($num_attributes < 1) {
+    die "Not enough attributes to train on";
+  }
+
+  my $samplesize = ceil($multiplier * $#train_file_lines);
+  my $numbins = ceil($#train_file_lines / $samplesize);
+
+  my $results;
+  if ($numbins >= 5)
+  {
+    foreach my $i (0..4) 
+    {
+      train($i * $samplesize, $samplesize * $i + $samplesize);
+      my $node_index = 1;
+      tree_clean($node_index);
+      $results += validate();
+    }
+    return $results / 5;
+  }
+  elsif ($numbins > 2) 
+  {
+    foreach my $i (0..4) {
+      train(ceil($i * $samplesize / 4), ceil($samplesize / 4 * $i + $samplesize));
+      my $node_index = 1;
+      tree_clean($node_index);
+      $results += validate();
+      
+    }
+    return $results / 5;
+  }
+  elsif ($numbins > 1)
+  {
+    foreach my $i (0..4) {
+      train(ceil($i * $samplesize / 400), ceil($samplesize / 400 * $i + $samplesize));
+      my $node_index = 1;
+      tree_clean($node_index);
+      print ceil($i * $samplesize / 400) . "    " . ceil($samplesize / 400 * $i + $samplesize);
+      $results += validate();
+    }
+    return $results / 5;
+  }
+  else
+  {
+    train(0,0);
+    my $node_index = 1;
+    tree_clean($node_index);
+    return validate();
+  }
+  
+}
+
+
+
 #main
 
 if ($#ARGV < 1) {
@@ -372,14 +444,14 @@ if ($#ARGV < 1) {
   print "  id3.pl d trainfile [pruning maxlevels]\n";
   print "    creates a decision tree based on data in trainfile\n";
   print "    prints tree to stdout in Disjunctive Normal Form\n";
+  print "  id3.pl l trainfile validatefile percent-of-tree [pruning maxlevels]\n";
+  print "    creates learning curve data\n";
+  print "    prints learning curve data\n";
   print "  append pruning maxlevels to specify pruning as a boolean and maxlevels as an integer\n";
   print "Example: id3.pl t btrain.csv 1 12 for training with pruning and 12 levels\n";
 } elsif ($ARGV[0] eq "t") {
-  if ($#ARGV > 1) {
-    $pruning = $ARGV[2];
-    $max_levels = $ARGV[3];
-  }
-  train();
+  train(0,0);
+
   my $node_index = 1;
   print "Size of uncleaned tree: ", tree_count(1), "\n";
   tree_clean($node_index);
@@ -396,6 +468,7 @@ if ($#ARGV < 1) {
   tree_clean($node_index);
   print_leaves_DNF($node_index, $DNF);
 } elsif ($ARGV[0] eq "e") {
+  train(0,0);
   if ($#ARGV > 2) {
     $pruning = $ARGV[3];
     $max_levels = $ARGV[4];
@@ -405,14 +478,16 @@ if ($#ARGV < 1) {
   tree_clean($node_index);
   test();
 } elsif ($ARGV[0] eq "v") {
-  if ($#ARGV > 2) {
-    $pruning = $ARGV[3];
-    $max_levels = $ARGV[4];
-  }
-  train();
+  train(0,0);
   my $node_index = 1;
   tree_clean($node_index);
   validate();
+} elsif ($ARGV[0] eq "l") {
+  if ($#ARGV > 3) {
+    $pruning = $ARGV[4];
+    $max_levels = $AARGV[5]
+  }
+  print learningcurve($ARGV[3]) . "\n";
 } else {
   print "Unable to parse command\n";
   print "For help:\n  id3.pl h\n";
