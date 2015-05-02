@@ -1,6 +1,6 @@
 # 349BasicDecisionTree
 
-`
+```
 Usage:
   id3.pl h
     provides usage help
@@ -17,4 +17,4 @@ Usage:
     compares results from tree with results in validatefile
     prints accuracy
   append pruning maxlevels to any of the above to specify pruning as a boolean and maxlevels as an integer
-`
+```
