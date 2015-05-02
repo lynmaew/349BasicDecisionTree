@@ -16,5 +16,8 @@ Usage:
     tests decision tree on  data in validatefile
     compares results from tree with results in validatefile
     prints accuracy
+  id3.pl d trainfile [pruning maxlevels]
+    creates a decision tree based on data in trainfile
+    prints tree to stdout in Disjunctive Normal Form
   append pruning maxlevels to any of the above to specify pruning as a boolean and maxlevels as an integer
 ```
