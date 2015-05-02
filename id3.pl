@@ -24,8 +24,8 @@ my @validate_data;
 my $num_validate_lines = 0;
 
 #parameters
-my $max_levels = 12;
-my $pruning = 1;
+my $max_levels = 6;
+my $pruning = 0;
 my $majority_threshold = 0.9;
 my $share_threshold = 0.1;
 my $reuse_attributes = 0;
@@ -48,7 +48,7 @@ sub train {
     die "Not enough attributes to train on";
   }
 
-  if ($start != 0 && $end != 0)
+  if ($start != 0 || $end != 0)
   {
     @train_file_lines = @train_file_lines[$start..$end];
   }
@@ -354,7 +354,6 @@ sub learningcurve {
   }
 
   my $samplesize = ceil($multiplier * $#train_file_lines);
-
   my $numbins = ceil($#train_file_lines / $samplesize);
 
   my $results;
@@ -369,7 +368,7 @@ sub learningcurve {
     }
     return $results / 5;
   }
-  elsif ($numbins >= 2) 
+  elsif ($numbins > 2) 
   {
     foreach my $i (0..4) {
       train(ceil($i * $samplesize / 4), ceil($samplesize / 4 * $i + $samplesize));
@@ -386,6 +385,7 @@ sub learningcurve {
       train(ceil($i * $samplesize / 400), ceil($samplesize / 400 * $i + $samplesize));
       my $node_index = 1;
       tree_clean($node_index);
+      print ceil($i * $samplesize / 400) . "    " . ceil($samplesize / 400 * $i + $samplesize);
       $results += validate();
     }
     return $results / 5;
@@ -399,6 +399,8 @@ sub learningcurve {
   }
   
 }
+
+
 
 #main
 
