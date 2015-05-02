@@ -10,6 +10,7 @@ my @tree_index;
 my @tree_value;
 my @tree_attribute;
 my @tree_leaf;
+my $attribute_line;
 my @attribute_list;
 
 #other global data
@@ -39,7 +40,7 @@ sub train {
   open (TRAIN_FILE, $ARGV[1]) or die "training file $ARGV[1] could not be read";
   my @train_file_lines = <TRAIN_FILE>;
   close (TRAIN_FILE);
-  my $attribute_line = $train_file_lines[0];
+  $attribute_line = $train_file_lines[0];
   splice(@train_file_lines, 0, 1);
   @attribute_list = split(',', $attribute_line);
   $num_attributes = $#attribute_list;
@@ -206,6 +207,14 @@ sub tree_print {
   }
 }
 
+sub tree_count {
+  my $node_index = $_[0];
+  if($tree_leaf[$node_index] == 0) {
+    return 1 + tree_count($node_index * 2) + tree_count($node_index * 2 + 1);
+  }
+  return 1;
+}
+
 #clean tree leaves from bottom up
 sub tree_clean {
   my $node_index = $_[0];
@@ -258,6 +267,9 @@ sub test {
       } else {
         $node_index = $node_index * 2 + 1;
       }
+    }
+    foreach my $j (0..$num_attributes) {
+      print $test_data[$i][$j], ",";
     }
     if ($tree_A[$node_index] > $tree_B[$node_index]) {
       print "0\n";
@@ -392,24 +404,34 @@ sub learningcurve {
 
 if ($#ARGV < 1) {
   print "Usage:\n  id3.pl h\n    provides usage help\n";
-  print "  id3.pl t trainfile\n    creates a decision tree based on data in trainfile\n";
+  print "  id3.pl t trainfile [pruning maxlevels]\n    creates a decision tree based on data in trainfile\n";
   print "    prints tree to stdout\n";
-  print "  id3.pl e trainfile testfile\n";
+  print "  id3.pl e trainfile testfile [pruning maxlevels]\n";
   print "    creates a decision tree based on data in trainfile\n";
   print "    tests decision tree on data in testfile\n";
-  print "    prints expected classes to stdout, line by line\n";
-  print "  id3.pl v trainfile validatefile\n";
+  print "    prints expected classes to stdout with other test data in csv format\n";
+  print "  id3.pl v trainfile validatefile [pruning maxlevels]\n";
   print "    creates a decision tree based on data inf trainfile\n";
   print "    tests decision tree on  data in validatefile\n";
   print "    compares results from tree with results in validatefile\n";
   print "    prints accuracy\n";
+  print "append pruning maxlevels to specify pruning as a boolean and maxlevels as an integer\n";
+  print "Example: id3.pl t btrain.csv 1 12 for training with pruning and 12 levels\n";
 } elsif ($ARGV[0] eq "t") {
   train(0,0);
+
   my $node_index = 1;
+  print "Size of uncleaned tree: ", tree_count(1), "\n";
   tree_clean($node_index);
   tree_print($node_index);
+  print "Size of cleaned tree: ", tree_count(1), "\n";
 } elsif ($ARGV[0] eq "e") {
   train(0,0);
+  if ($#ARGV > 2) {
+    $pruning = $ARGV[3];
+    $max_levels = $ARGV[4];
+  }
+  train();
   my $node_index = 1;
   tree_clean($node_index);
   test();
