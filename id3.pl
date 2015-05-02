@@ -330,11 +330,35 @@ sub validate {
 
 }
 
+sub print_leaves_DNF {
+  my $node_index = $_[0];
+  my $DNF = $_[1];
+  
+  if ($tree_leaf[$node_index] == 1) {
+    print "if $DNF then class ";
+    if ($tree_A[$node_index] > $tree_B[$node_index]) {
+      print "0\n";
+    } else {
+      print "1\n";
+    }
+  } else {
+    if ($DNF eq "") {
+    } else {
+      $DNF = $DNF . "AND";
+    }
+    my $left_DNF = $DNF . "($attribute_list[$tree_attribute[$node_index]] < $tree_value[$node_index])";
+    my $right_DNF = $DNF . "($attribute_list[$tree_attribute[$node_index]] >= $tree_value[$node_index])";
+    print_leaves_DNF($node_index * 2, $left_DNF);
+    print_leaves_DNF($node_index * 2 + 1, $right_DNF);
+  }
+}
+
 #main
 
 if ($#ARGV < 1) {
   print "Usage:\n  id3.pl h\n    provides usage help\n";
-  print "  id3.pl t trainfile [pruning maxlevels]\n    creates a decision tree based on data in trainfile\n";
+  print "  id3.pl t trainfile [pruning maxlevels]\n";
+  print "    creates a decision tree based on data in trainfile\n";
   print "    prints tree to stdout\n";
   print "  id3.pl e trainfile testfile [pruning maxlevels]\n";
   print "    creates a decision tree based on data in trainfile\n";
@@ -345,7 +369,10 @@ if ($#ARGV < 1) {
   print "    tests decision tree on  data in validatefile\n";
   print "    compares results from tree with results in validatefile\n";
   print "    prints accuracy\n";
-  print "append pruning maxlevels to specify pruning as a boolean and maxlevels as an integer\n";
+  print "  id3.pl d trainfile [pruning maxlevels]\n";
+  print "    creates a decision tree based on data in trainfile\n";
+  print "    prints tree to stdout in Disjunctive Normal Form\n";
+  print "  append pruning maxlevels to specify pruning as a boolean and maxlevels as an integer\n";
   print "Example: id3.pl t btrain.csv 1 12 for training with pruning and 12 levels\n";
 } elsif ($ARGV[0] eq "t") {
   if ($#ARGV > 1) {
@@ -358,6 +385,16 @@ if ($#ARGV < 1) {
   tree_clean($node_index);
   tree_print($node_index);
   print "Size of cleaned tree: ", tree_count(1), "\n";
+} elsif ($ARGV[0] eq "d") {
+  if ($#ARGV > 1) {
+    $pruning = $ARGV[2];
+    $max_levels = $ARGV[3];
+  }
+  my $node_index = 1;
+  my $DNF = "";
+  train();
+  tree_clean($node_index);
+  print_leaves_DNF($node_index, $DNF);
 } elsif ($ARGV[0] eq "e") {
   if ($#ARGV > 2) {
     $pruning = $ARGV[3];
